@@ -24,8 +24,12 @@ public class UdpClient implements Closeable {
     private Scanner scanner;
     private InetAddress server;
     private MessageDeserializer messageDeserializer;
+    private String host;
+    private int port;
 
     public UdpClient() throws UnknownHostException, SocketException {
+        this.host = "localhost";
+        this.port = 13000;
         scanner = new Scanner(System.in);
         server = InetAddress.getByName(SERVER_HOST);
         socket = new DatagramSocket();
@@ -35,7 +39,7 @@ public class UdpClient implements Closeable {
         messageDeserializer = new MessageDeserializer();
     }
 
-    public void doWork() {
+    public void doWork() throws UnknownHostException {
         String login = askForInput("Enter login");
         while (!isValidLogin(login)) {
             System.out.println("Invalid login: " + login);
@@ -47,17 +51,20 @@ public class UdpClient implements Closeable {
             String receiverLogin = askForInput("Enter receiver: ");
             ClientId receiver = new ClientId(receiverLogin);
             String text = askForInput("Enter a message: ");
-            Message message = new Message(sender, receiver, ZonedDateTime.now(), text);
-            byte[] bytes = messageDeserializer.writeMessage(message);
-            packet.setData(bytes);
-            packet.setLength(bytes.length);
-            try {
-                socket.send(packet);
-            } catch (IOException e) {
-                logger.error("Can not send a packet: " + e.getMessage());
-            }
+            Message message = new Message(sender, receiver, ZonedDateTime.now(), InetAddress.getByName(host), port, text);
+            sendMessage(message);
         }
+    }
 
+    private void sendMessage(Message message) {
+        byte[] bytes = messageDeserializer.writeMessage(message);
+        packet.setData(bytes);
+        packet.setLength(bytes.length);
+        try {
+            socket.send(packet);
+        } catch (IOException e) {
+            logger.error("Can not send a packet: " + e.getMessage());
+        }
     }
 
     private boolean isValidLogin(String login) {

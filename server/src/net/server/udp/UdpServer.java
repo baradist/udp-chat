@@ -4,6 +4,7 @@ package net.server.udp;
 import net.lib.ClientId;
 import net.lib.Message;
 import net.lib.MessageDeserializer;
+import net.lib.model.AddressPort;
 import util.Logger;
 
 import java.io.IOException;
@@ -11,9 +12,11 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class UdpServer implements Runnable {
@@ -22,11 +25,16 @@ public class UdpServer implements Runnable {
     private static Logger log = new Logger();
 
     private Map<ClientId, List<Message>> messageMap;
+    private Map<ClientId, AddressPort> lastAddressMap;
+    private Queue<ClientId> messagesQueue;
+
     private MessageDeserializer deserializer;
 
     public UdpServer() {
-        this.deserializer = new MessageDeserializer();
-        this.messageMap = new HashMap<>();
+        deserializer = new MessageDeserializer();
+        messageMap = new ConcurrentHashMap<>();
+        lastAddressMap = new ConcurrentHashMap<>();
+        messagesQueue = new LinkedBlockingQueue<>();
     }
 
     @Override
@@ -61,20 +69,32 @@ public class UdpServer implements Runnable {
                     Message msg = deserializer.readMessage(packet.getData());
                     printMessage(msg);
                     ClientId receiver = msg.getReceiver();
-                    if (messageMap.containsKey(receiver)) {
-                        messageMap.get(receiver).add(msg);
-                    } else {
-                        messageMap.put(receiver, new ArrayList<Message>() {{
-                            add(msg);
-                        }});
-                    }
 
+                    lastAddressMap.put(msg.getSender(), msg.getAddressPort());
+
+                    addMessageToOutbox(msg, receiver);
+                    resendExistingMessagesFor(msg.getSender());
                 } catch (IOException e) {
                     log.error("Can not read DatagramPacket. " + e.getMessage());
                 } finally {
 //                    clearBuffer(); // TODO: ?
                 }
             }
+        }
+
+        private void resendExistingMessagesFor(ClientId sender) {
+            messagesQueue.add(sender);
+        }
+
+        private void addMessageToOutbox(Message msg, ClientId receiver) {
+            if (messageMap.containsKey(receiver)) {
+                messageMap.get(receiver).add(msg);
+            } else {
+                messageMap.put(receiver, new ArrayList<Message>() {{
+                    add(msg);
+                }});
+            }
+            messagesQueue.add(receiver);
         }
 
         private void printMessage(Message msg) {

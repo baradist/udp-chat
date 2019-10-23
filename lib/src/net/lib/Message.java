@@ -1,24 +1,25 @@
 package net.lib;
 
+import net.lib.model.AddressPort;
+
 import java.io.Serializable;
+import java.net.InetAddress;
 import java.time.ZonedDateTime;
 
 public class Message implements Serializable {
-
 
     private final ClientId sender;
     private final ClientId receiver;
     private final ZonedDateTime dateTime;
     private final String message;
+    private final AddressPort addressPort;
 
-//    private final InetAddress address;
-//    private final int port;
-
-    public Message(ClientId sender, ClientId receiver, ZonedDateTime dateTime, String message) {
+    public Message(ClientId sender, ClientId receiver, ZonedDateTime dateTime, InetAddress address, int port, String message) {
         this.sender = sender;
         this.receiver = receiver;
         this.dateTime = dateTime;
         this.message = message;
+        addressPort = new AddressPort(address, port);
     }
 
     public ClientId getSender() {
@@ -35,6 +36,10 @@ public class Message implements Serializable {
 
     public String getMessage() {
         return message;
+    }
+
+    public AddressPort getAddressPort() {
+        return addressPort;
     }
 
     @Override
