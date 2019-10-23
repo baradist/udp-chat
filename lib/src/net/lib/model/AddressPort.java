@@ -11,4 +11,12 @@ public class AddressPort implements Serializable {
         this.address = address;
         this.port = port;
     }
+
+    public InetAddress getAddress() {
+        return address;
+    }
+
+    public int getPort() {
+        return port;
+    }
 }

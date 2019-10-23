@@ -11,10 +11,10 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
-import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,11 +22,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class UdpServer implements Runnable {
     public static final int SERVER_PORT = 12345;
     public static final int BUFFER_SIZE = 2048;
-    private static Logger log = new Logger();
+    private static Logger logger = new Logger();
 
-    private Map<ClientId, List<Message>> messageMap;
+    private Map<ClientId, Set<Message>> messageMap;
     private Map<ClientId, AddressPort> lastAddressMap;
-    private Queue<ClientId> messagesQueue;
+    private LinkedBlockingQueue<ClientId> messagesQueue;
 
     private MessageDeserializer deserializer;
 
@@ -41,9 +41,73 @@ public class UdpServer implements Runnable {
     public void run() {
         try {
             new Thread(new Consumer()).start();
-            log.info("UdpServer has been started");
+            new Thread(new Producer()).start();
+            logger.info("UdpServer has been started");
         } catch (SocketException e) {
-            log.error("Can not connect to the server: " + e.getMessage());
+            logger.error("Can not connect to the server: " + e.getMessage());
+        }
+    }
+
+    private void removeMessagesFor(ClientId receiver, Message message) {
+        if (!messageMap.containsKey(receiver)) {
+            return;
+        }
+        Set<Message> messages = messageMap.get(receiver);
+        messages.remove(message);
+        if (messages.isEmpty()) {
+            messageMap.remove(receiver);
+        }
+    }
+
+    private void removeMessagesFor(ClientId receiver) {
+        messageMap.remove(receiver);
+    }
+
+    private Set<Message> getMessagesFor(ClientId receiver) {
+        return messageMap.getOrDefault(receiver, Collections.emptySet());
+    }
+
+    private class Producer implements Runnable {
+        private DatagramSocket socket;
+        private DatagramPacket packet;
+        private byte[] buffer;
+
+        public Producer() throws SocketException {
+            socket = new DatagramSocket();
+            buffer = new byte[BUFFER_SIZE];
+            packet = new DatagramPacket(buffer, buffer.length);
+        }
+
+        @Override
+        public void run() {
+            while (true) {
+                ClientId receiver = null;
+                try {
+                    receiver = messagesQueue.take();
+                } catch (InterruptedException e) {
+                    logger.error(e.getMessage());
+                    throw new RuntimeException(e);
+                }
+                Set<Message> messages = getMessagesFor(receiver);
+                for (Message message : messages) {
+                    sendMessage(message);
+                }
+                removeMessagesFor(receiver);
+            }
+        }
+
+        private void sendMessage(Message message) {
+            byte[] bytes = deserializer.writeMessage(message);
+            packet.setData(bytes);
+            packet.setLength(bytes.length);
+            packet.setAddress(message.getAddressPort().getAddress());
+            packet.setPort(message.getAddressPort().getPort());
+
+            try {
+                socket.send(packet);
+            } catch (IOException e) {
+                logger.error("Can not send a packet: " + e.getMessage());
+            }
         }
     }
 
@@ -75,7 +139,7 @@ public class UdpServer implements Runnable {
                     addMessageToOutbox(msg, receiver);
                     resendExistingMessagesFor(msg.getSender());
                 } catch (IOException e) {
-                    log.error("Can not read DatagramPacket. " + e.getMessage());
+                    logger.error("Can not read DatagramPacket. " + e.getMessage());
                 } finally {
 //                    clearBuffer(); // TODO: ?
                 }
@@ -90,7 +154,7 @@ public class UdpServer implements Runnable {
             if (messageMap.containsKey(receiver)) {
                 messageMap.get(receiver).add(msg);
             } else {
-                messageMap.put(receiver, new ArrayList<Message>() {{
+                messageMap.put(receiver, new HashSet<Message>() {{
                     add(msg);
                 }});
             }
@@ -98,7 +162,7 @@ public class UdpServer implements Runnable {
         }
 
         private void printMessage(Message msg) {
-            log.info(msg.toString());
+            logger.info(msg.toString());
         }
 
         private void clearBuffer() {
