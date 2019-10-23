@@ -40,7 +40,7 @@ public class UdpServer implements Runnable {
     @Override
     public void run() {
         try {
-            new Thread(new Consumer()).start();
+            new Thread(new Consumer(SERVER_PORT)).start();
             new Thread(new Producer()).start();
             logger.info("UdpServer has been started");
         } catch (SocketException e) {
@@ -117,8 +117,8 @@ public class UdpServer implements Runnable {
         private byte[] buffer;
         private AtomicBoolean hasJob;
 
-        public Consumer() throws SocketException {
-            input = new DatagramSocket(SERVER_PORT);
+        public Consumer(int port) throws SocketException {
+            input = new DatagramSocket(port);
             buffer = new byte[BUFFER_SIZE];
             packet = new DatagramPacket(buffer, BUFFER_SIZE);
             hasJob = new AtomicBoolean(false);
@@ -131,19 +131,23 @@ public class UdpServer implements Runnable {
                 try {
                     input.receive(packet);
                     Message msg = deserializer.readMessage(packet.getData());
-                    printMessage(msg);
-                    ClientId receiver = msg.getReceiver();
-
-                    lastAddressMap.put(msg.getSender(), msg.getAddressPort());
-
-                    addMessageToOutbox(msg, receiver);
-                    resendExistingMessagesFor(msg.getSender());
+                    processMessage(msg);
                 } catch (IOException e) {
                     logger.error("Can not read DatagramPacket. " + e.getMessage());
                 } finally {
 //                    clearBuffer(); // TODO: ?
                 }
             }
+        }
+
+        private void processMessage(Message msg) {
+            printMessage(msg);
+            ClientId receiver = msg.getReceiver();
+
+            lastAddressMap.put(msg.getSender(), msg.getAddressPort());
+
+            addMessageToOutbox(msg, receiver);
+            resendExistingMessagesFor(msg.getSender());
         }
 
         private void resendExistingMessagesFor(ClientId sender) {

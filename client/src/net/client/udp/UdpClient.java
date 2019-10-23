@@ -1,5 +1,6 @@
 package net.client.udp;
 
+import net.client.Consumer;
 import net.lib.ClientId;
 import net.lib.Message;
 import net.lib.MessageDeserializer;
@@ -39,7 +40,9 @@ public class UdpClient implements Closeable {
         messageDeserializer = new MessageDeserializer();
     }
 
-    public void doWork() throws UnknownHostException {
+    public void doWork() throws UnknownHostException, SocketException {
+        new Thread(new Consumer(port)).start();
+
         String login = askForInput("Enter login");
         while (!isValidLogin(login)) {
             System.out.println("Invalid login: " + login);
