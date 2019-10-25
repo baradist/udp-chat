@@ -29,14 +29,11 @@ public class UdpClient implements Closeable {
     private int port;
 
     public UdpClient() throws UnknownHostException, SocketException {
-        this.host = "localhost";
-        this.port = 13000;
         scanner = new Scanner(System.in);
         server = InetAddress.getByName(SERVER_HOST);
         socket = new DatagramSocket();
         buffer = new byte[BUFFER_SIZE];
         packet = new DatagramPacket(buffer, buffer.length, server, SERVER_PORT);
-        packet.setAddress(server);
         messageDeserializer = new MessageDeserializer();
     }
 
@@ -54,7 +51,7 @@ public class UdpClient implements Closeable {
             String receiverLogin = askForInput("Enter receiver: ");
             ClientId receiver = new ClientId(receiverLogin);
             String text = askForInput("Enter a message: ");
-            Message message = new Message(sender, receiver, ZonedDateTime.now(), InetAddress.getByName(host), port, text);
+            Message message = new Message(sender, receiver, ZonedDateTime.now(), text);
             sendMessage(message);
         }
     }

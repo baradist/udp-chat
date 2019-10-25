@@ -4,13 +4,10 @@ package net.server.udp;
 import net.lib.ClientId;
 import net.lib.Message;
 import net.lib.MessageDeserializer;
-import net.lib.model.AddressPort;
 import util.Logger;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.SocketException;
+import java.net.*;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -25,7 +22,7 @@ public class UdpServer implements Runnable {
     private static Logger logger = new Logger();
 
     private Map<ClientId, Set<Message>> messageMap;
-    private Map<ClientId, AddressPort> lastAddressMap;
+    private Map<ClientId, InetSocketAddress> lastAddressMap;
     private LinkedBlockingQueue<ClientId> messagesQueue;
 
     private MessageDeserializer deserializer;
@@ -88,20 +85,23 @@ public class UdpServer implements Runnable {
                     logger.error(e.getMessage());
                     throw new RuntimeException(e);
                 }
+                if (!lastAddressMap.containsKey(receiver)) {
+                    return;
+                }
+                InetSocketAddress inetSocketAddress = lastAddressMap.get(receiver);
                 Set<Message> messages = getMessagesFor(receiver);
                 for (Message message : messages) {
-                    sendMessage(message);
+                    sendMessage(inetSocketAddress, message);
                 }
                 removeMessagesFor(receiver);
             }
         }
 
-        private void sendMessage(Message message) {
+        private void sendMessage(InetSocketAddress socketAddress, Message message) {
             byte[] bytes = deserializer.writeMessage(message);
             packet.setData(bytes);
             packet.setLength(bytes.length);
-            packet.setAddress(message.getAddressPort().getAddress());
-            packet.setPort(message.getAddressPort().getPort());
+            packet.setSocketAddress(socketAddress);
 
             try {
                 socket.send(packet);
@@ -130,8 +130,7 @@ public class UdpServer implements Runnable {
             while (hasJob.get()) {
                 try {
                     input.receive(packet);
-                    Message msg = deserializer.readMessage(packet.getData());
-                    processMessage(msg);
+                    processMessage(packet);
                 } catch (IOException e) {
                     logger.error("Can not read DatagramPacket. " + e.getMessage());
                 } finally {
@@ -140,11 +139,13 @@ public class UdpServer implements Runnable {
             }
         }
 
-        private void processMessage(Message msg) {
+        private void processMessage(DatagramPacket packet) {
+            Message msg = deserializer.readMessage(packet.getData());
+
             printMessage(msg);
             ClientId receiver = msg.getReceiver();
 
-            lastAddressMap.put(msg.getSender(), msg.getAddressPort());
+            lastAddressMap.put(msg.getSender(), (InetSocketAddress) packet.getSocketAddress());
 
             addMessageToOutbox(msg, receiver);
             resendExistingMessagesFor(msg.getSender());
