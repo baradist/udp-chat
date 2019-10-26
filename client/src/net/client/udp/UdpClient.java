@@ -17,6 +17,7 @@ public class UdpClient implements Closeable {
     public static final int BUFFER_SIZE = 2048; // TODO: make a single common variable
     public static final String SERVER_HOST = "localhost";
     private static Logger logger = new Logger();
+    private final Consumer consumer;
     private ClientId clientId;
     private Message message;
     private DatagramSocket socket;
@@ -34,11 +35,13 @@ public class UdpClient implements Closeable {
         socket = new DatagramSocket();
         buffer = new byte[BUFFER_SIZE];
         packet = new DatagramPacket(buffer, buffer.length, server, SERVER_PORT);
+        consumer = new Consumer();
         messageDeserializer = new MessageDeserializer();
     }
 
     public void doWork() throws UnknownHostException, SocketException {
-        new Thread(new Consumer(port)).start();
+
+        new Thread(consumer).start();
 
         String login = askForInput("Enter login");
         while (!isValidLogin(login)) {
@@ -51,7 +54,7 @@ public class UdpClient implements Closeable {
             String receiverLogin = askForInput("Enter receiver: ");
             ClientId receiver = new ClientId(receiverLogin);
             String text = askForInput("Enter a message: ");
-            Message message = new Message(sender, receiver, ZonedDateTime.now(), text);
+            Message message = new Message(sender, receiver, consumer.getInetSocketAddress(), ZonedDateTime.now(), text);
             sendMessage(message);
         }
     }

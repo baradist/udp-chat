@@ -7,6 +7,7 @@ import util.Logger;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
 import java.net.SocketException;
 
 import static net.client.udp.UdpClient.BUFFER_SIZE;
@@ -17,17 +18,20 @@ public class Consumer implements Runnable {
     private DatagramSocket input;
     private DatagramPacket packet;
     private byte[] buffer;
+    private InetSocketAddress inetSocketAddress;
     private MessageDeserializer deserializer;
 
-    public Consumer(int port) throws SocketException {
-        input = new DatagramSocket(port);
+    public Consumer() throws SocketException {
+        input = new DatagramSocket();
         buffer = new byte[BUFFER_SIZE];
         packet = new DatagramPacket(buffer, BUFFER_SIZE);
+        inetSocketAddress = (InetSocketAddress) input.getLocalSocketAddress();
         deserializer = new MessageDeserializer();
     }
 
     @Override
     public void run() {
+        logger.info("Client listens on " + input.getLocalSocketAddress().toString());
         while (true) {
             try {
                 input.receive(packet);
@@ -39,6 +43,10 @@ public class Consumer implements Runnable {
 //                    clearBuffer(); // TODO: ?
             }
         }
+    }
+
+    public InetSocketAddress getInetSocketAddress() {
+        return inetSocketAddress;
     }
 
     private void processMessage(Message msg) {

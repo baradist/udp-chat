@@ -86,7 +86,7 @@ public class UdpServer implements Runnable {
                     throw new RuntimeException(e);
                 }
                 if (!lastAddressMap.containsKey(receiver)) {
-                    return;
+                    continue;
                 }
                 InetSocketAddress inetSocketAddress = lastAddressMap.get(receiver);
                 Set<Message> messages = getMessagesFor(receiver);
@@ -98,6 +98,7 @@ public class UdpServer implements Runnable {
         }
 
         private void sendMessage(InetSocketAddress socketAddress, Message message) {
+            logger.info("Send to " + socketAddress + ", Message: " + message);
             byte[] bytes = deserializer.writeMessage(message);
             packet.setData(bytes);
             packet.setLength(bytes.length);
@@ -130,7 +131,8 @@ public class UdpServer implements Runnable {
             while (hasJob.get()) {
                 try {
                     input.receive(packet);
-                    processMessage(packet);
+                    Message msg = deserializer.readMessage(packet.getData());
+                    processMessage(msg);
                 } catch (IOException e) {
                     logger.error("Can not read DatagramPacket. " + e.getMessage());
                 } finally {
@@ -139,16 +141,14 @@ public class UdpServer implements Runnable {
             }
         }
 
-        private void processMessage(DatagramPacket packet) {
-            Message msg = deserializer.readMessage(packet.getData());
+        private void processMessage(Message message) {
+            printMessage(message);
+            ClientId receiver = message.getReceiver();
 
-            printMessage(msg);
-            ClientId receiver = msg.getReceiver();
+            lastAddressMap.put(message.getSender(), message.getSenderInetSocketAddress());
 
-            lastAddressMap.put(msg.getSender(), (InetSocketAddress) packet.getSocketAddress());
-
-            addMessageToOutbox(msg, receiver);
-            resendExistingMessagesFor(msg.getSender());
+            addMessageToOutbox(message, receiver);
+            resendExistingMessagesFor(message.getSender());
         }
 
         private void resendExistingMessagesFor(ClientId sender) {
@@ -167,7 +167,7 @@ public class UdpServer implements Runnable {
         }
 
         private void printMessage(Message msg) {
-            logger.info(msg.toString());
+            logger.info("Received: " + msg.toString());
         }
 
         private void clearBuffer() {
