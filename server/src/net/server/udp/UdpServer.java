@@ -7,7 +7,10 @@ import net.lib.MessageDeserializer;
 import util.Logger;
 
 import java.io.IOException;
-import java.net.*;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
@@ -32,6 +35,11 @@ public class UdpServer implements Runnable {
         messageMap = new ConcurrentHashMap<>();
         lastAddressMap = new ConcurrentHashMap<>();
         messagesQueue = new LinkedBlockingQueue<>();
+
+//        ClientId receiver = new ClientId("1");
+//        messageMap.put(receiver, new HashSet<Message>() {{
+//            add(new Message(new ClientId("2"), receiver, null, ZonedDateTime.now(), "Message"));
+//        }});
     }
 
     @Override
@@ -145,7 +153,8 @@ public class UdpServer implements Runnable {
             printMessage(message);
             ClientId receiver = message.getReceiver();
 
-            lastAddressMap.put(message.getSender(), message.getSenderInetSocketAddress());
+            lastAddressMap.put(message.getSender(),
+                    new InetSocketAddress("localhost", message.getSenderInetSocketAddress().getPort())); // TODO
 
             addMessageToOutbox(message, receiver);
             resendExistingMessagesFor(message.getSender());
